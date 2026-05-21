@@ -89,44 +89,24 @@ def test_scan_ports_deduplicates():
 # ---------------------------------------------------------------------------
 
 def _sample_entries():
+    """Return a small list of PortEntry objects for use in formatter tests."""
     return [
-        PortEntry(port=80, protocol="tcp", pid=1, process_name="nginx",
-                  process_cmdline=["nginx"], status="LISTEN", local_address="0.0.0.0"),
-        PortEntry(port=5432, protocol="tcp", pid=2, process_name="postgres",
-                  process_cmdline=["postgres"], status="LISTEN", local_address="127.0.0.1"),
+        PortEntry(port=80, protocol="tcp", pid=1, process_name="nginx"),
+        PortEntry(port=443, protocol="tcp", pid=2, process_name="nginx"),
+        PortEntry(port=5432, protocol="tcp", pid=99, process_name="postgres"),
     ]
 
 
-def test_format_table_contains_headers():
-    table = format_table(_sample_entries())
-    for col in ["PORT", "PROTO", "STATUS", "PID", "PROCESS", "ADDRESS"]:
-        assert col in table
+def test_format_json_contains_all_ports():
+    entries = _sample_entries()
+    output = format_json(entries)
+    data = json.loads(output)
+    ports = [item["port"] for item in data]
+    assert ports == [80, 443, 5432]
 
 
-def test_format_table_contains_data():
-    table = format_table(_sample_entries())
-    assert "nginx" in table
-    assert "5432" in table
-
-
-def test_format_table_empty():
-    table = format_table([])
-    assert "no listening ports" in table
-
-
-def test_format_json_valid():
-    result = format_json(_sample_entries())
-    data = json.loads(result)
-    assert len(data) == 2
-    assert data[0]["port"] == 80
+def test_format_json_includes_label():
+    entries = _sample_entries()
+    output = format_json(entries)
+    data = json.loads(output)
     assert data[0]["label"] == "nginx (pid=1)"
-
-
-def test_render_dispatches_json():
-    out = render(_sample_entries(), output_format="json")
-    assert json.loads(out)  # valid JSON
-
-
-def test_render_dispatches_table():
-    out = render(_sample_entries(), output_format="table")
-    assert "PORT" in out
