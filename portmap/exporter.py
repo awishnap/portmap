@@ -12,6 +12,12 @@ from portmap.scanner import PortEntry
 
 ExportFormat = Literal["json", "csv", "markdown"]
 
+FORMAT_EXTENSIONS: dict[str, str] = {
+    "json": ".json",
+    "csv": ".csv",
+    "markdown": ".md",
+}
+
 
 def export_json(entries: List[PortEntry], indent: int = 2) -> str:
     """Serialize port entries to a JSON string."""
@@ -64,11 +70,17 @@ def export_markdown(entries: List[PortEntry]) -> str:
 
 
 def save(entries: List[PortEntry], path: str | Path, fmt: ExportFormat) -> Path:
-    """Write exported content to *path* and return the resolved Path."""
+    """Write exported content to *path* and return the resolved Path.
+
+    If *path* has no suffix, the appropriate file extension for *fmt* is
+    appended automatically (e.g. ``report`` becomes ``report.json``).
+    """
     dispatch = {"json": export_json, "csv": export_csv, "markdown": export_markdown}
     if fmt not in dispatch:
         raise ValueError(f"Unsupported format: {fmt!r}. Choose from {list(dispatch)}.")
     content = dispatch[fmt](entries)  # type: ignore[operator]
     out = Path(path)
+    if not out.suffix:
+        out = out.with_suffix(FORMAT_EXTENSIONS[fmt])
     out.write_text(content, encoding="utf-8")
     return out.resolve()
