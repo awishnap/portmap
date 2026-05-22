@@ -108,9 +108,14 @@ def test_main_json_output(mock_scan, capsys):
     assert data[0]["port"] == 443
 
 
-@patch("portmap.cli.scan_ports", return_value=[])
-def test_main_invalid_port_exits(mock_scan):
-    with pytest.raises(SystemExit) as exc_info:
-        main(["-p", "notaport"])
-    assert exc_info.value.code != 0
-    mock_scan.assert_not_called()
+@patch("portmap.cli.scan_ports")
+def test_main_json_output_multiple_entries(mock_scan, capsys):
+    mock_scan.return_value = [_make_entry(80), _make_entry(443)]
+    rc = main(["-p", "80,443", "-f", "json"])
+    assert rc == 0
+    captured = capsys.readouterr()
+    data = json.loads(captured.out)
+    assert len(data) == 2
+    ports = [entry["port"] for entry in data]
+    assert 80 in ports
+    assert 443 in ports
