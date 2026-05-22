@@ -60,3 +60,24 @@ def test_has_changes_true_when_only_added():
 def test_summary_only_removed():
     diff = compare(capture([_e(1234)]), capture([]))
     assert diff.summary() == "-1 removed"
+
+
+def test_compare_pid_change_detected():
+    """A process restart on the same port (new PID) should appear in changed."""
+    s1 = capture([_e(8080, pid=100, process="app")])
+    s2 = capture([_e(8080, pid=101, process="app")])
+    diff = compare(s1, s2)
+    assert len(diff.changed) == 1
+    before, after = diff.changed[0]
+    assert before.pid == 100
+    assert after.pid == 101
+
+
+def test_compare_process_name_change_detected():
+    """A change in process name on the same port should appear in changed."""
+    s1 = capture([_e(8080, process="old_app")])
+    s2 = capture([_e(8080, process="new_app")])
+    diff = compare(s1, s2)
+    assert len(diff.changed) == 1
+    assert diff.changed[0][0].process == "old_app"
+    assert diff.changed[0][1].process == "new_app"
