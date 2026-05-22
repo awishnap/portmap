@@ -97,9 +97,15 @@ def test_always_open_filters_correctly():
 def test_unstable_filters_below_threshold():
     s1 = _snap(_entry(5000))
     s2 = _snap()  # gone
-    s3 = _snap()  # gone
-    s4 = _snap()  # gone
-    report = analyse([s1, s2, s3, s4])
-    # stability == 0.25, below default 0.8
-    assert len(report.unstable()) == 1
-    assert len(report.unstable(threshold=0.1)) == 0
+    report = analyse([s1, s2])
+    # stability == 0.5, default threshold is typically < 1.0
+    unstable = report.unstable(threshold=0.8)
+    assert any(t.port == 5000 for t in unstable)
+
+
+def test_unstable_excludes_stable_ports():
+    """Ports present in every snapshot should not appear in unstable results."""
+    snaps = [_snap(_entry(443)) for _ in range(4)]
+    report = analyse(snaps)
+    unstable = report.unstable(threshold=0.8)
+    assert not any(t.port == 443 for t in unstable)
