@@ -38,16 +38,34 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def parse_port_range(spec: str) -> list[int]:
-    """Parse a port specification string into a list of port numbers."""
+    """Parse a port specification string into a list of port numbers.
+
+    Accepts comma-separated ports and/or hyphen-delimited ranges.
+
+    Examples:
+        "80"          -> [80]
+        "80,443"      -> [80, 443]
+        "1-1024"      -> [1, 2, ..., 1024]
+        "22,80,8000-8080" -> [22, 80, 8000, 8001, ..., 8080]
+
+    Raises:
+        ValueError: If any part of the spec is not a valid port number or range,
+                    or if any port falls outside the 1-65535 range.
+    """
     ports: list[int] = []
     for part in spec.split(","):
         part = part.strip()
         if "-" in part:
             start, _, end = part.partition("-")
             try:
-                ports.extend(range(int(start), int(end) + 1))
+                start_int, end_int = int(start), int(end)
             except ValueError:
                 raise ValueError(f"Invalid port range: '{part}'")
+            if start_int > end_int:
+                raise ValueError(
+                    f"Port range start must not exceed end: '{part}'"
+                )
+            ports.extend(range(start_int, end_int + 1))
         else:
             try:
                 ports.append(int(part))
