@@ -1,77 +1,96 @@
-"""Snapshot management: capture and compare port scan states."""
+"""Snapshot capture, serialisation, and persistence for portmap."""
 
 from __future__ import annotations
 
-import time
-from dataclasses import dataclass, field
-from typing import List, Optional
+import json
+import socket
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
-from portmap.scanner import PortEntry
-from portmap.cache import write, read
+from portmap.scanner import PortEntry, scan_ports
 
 
 @dataclass
 class Snapshot:
-    timestamp: float
-    entries: List[PortEntry]
-    label: str = ""
-    meta: dict = field(default_factory=dict)
+    host: str
+    ts: str
+    entries: list[PortEntry] = field(default_factory=list)
+    meta: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> dict:
-        return {
-            "timestamp": self.timestamp,
-            "label": self.label,
-            "meta": self.meta,
-            "entries": [
-                {
-                    "port": e.port,
-                    "protocol": e.protocol,
-                    "pid": e.pid,
-                    "process": e.process,
-                    "status": e.status,
-                }
-                for e in self.entries
-            ],
-        }
 
-    @classmethod
-    def from_dict(cls, data: dict) -> "Snapshot":
-        entries = [
-            PortEntry(
-                port=r["port"],
-                protocol=r["protocol"],
-                pid=r.get("pid"),
-                process=r.get("process"),
-                status=r.get("status", "LISTEN"),
-            )
-            for r in data.get("entries", [])
-        ]
-        return cls(
-            timestamp=data["timestamp"],
-            entries=entries,
-            label=data.get("label", ""),
-            meta=data.get("meta", {}),
+# ---------------------------------------------------------------------------
+# Serialisation helpers
+# ---------------------------------------------------------------------------
+
+def to_dict(snapshot: Snapshot) -> dict[str, Any]:
+    return {
+        "host": snapshot.host,
+        "ts": snapshot.ts,
+        "meta": snapshot.meta,
+        "entries": [
+            {
+                "port": e.port,
+                "protocol": e.protocol,
+                "pid": e.pid,
+                "process": e.process,
+                "status": e.status,
+                "label": e.label,
+            }
+            for e in snapshot.entries
+        ],
+    }
+
+
+def from_dict(data: dict[str, Any]) -> Snapshot:
+    entries = [
+        PortEntry(
+            port=row["port"],
+            protocol=row.get("protocol", "tcp"),
+            pid=row.get("pid"),
+            process=row.get("process"),
+            status=row.get("status", "LISTEN"),
+            label=row.get("label", ""),
         )
-
-
-def capture(entries: List[PortEntry], label: str = "", meta: Optional[dict] = None) -> Snapshot:
-    """Create a new snapshot from a list of PortEntry objects."""
+        for row in data.get("entries", [])
+    ]
     return Snapshot(
-        timestamp=time.time(),
-        entries=list(entries),
-        label=label,
-        meta=meta or {},
+        host=data["host"],
+        ts=data["ts"],
+        entries=entries,
+        meta=data.get("meta", {}),
     )
 
 
-def save_snapshot(snapshot: Snapshot, path: str) -> None:
-    """Persist a snapshot to disk via the cache layer."""
-    write(snapshot.to_dict(), path)
+# ---------------------------------------------------------------------------
+# Capture
+# ---------------------------------------------------------------------------
+
+def capture(
+    ports: list[int] | None = None,
+    protocols: list[str] | None = None,
+) -> Snapshot:
+    """Scan live ports and return a Snapshot."""
+    entries = scan_ports(ports=ports, protocols=protocols)
+    return Snapshot(
+        host=socket.gethostname(),
+        ts=datetime.now(timezone.utc).isoformat(),
+        entries=entries,
+    )
 
 
-def load_snapshot(path: str) -> Optional[Snapshot]:
-    """Load a snapshot from disk; returns None if not found."""
-    data = read(path)
-    if data is None:
-        return None
-    return Snapshot.from_dict(data)
+# ---------------------------------------------------------------------------
+# Persistence
+# ---------------------------------------------------------------------------
+
+def save_snapshot(snapshot: Snapshot, path: Path) -> None:
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(to_dict(snapshot), indent=2), encoding="utf-8")
+
+
+def load_snapshot(path: Path) -> Snapshot:
+    path = Path(path)
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return from_dict(data)
