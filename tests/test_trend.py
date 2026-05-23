@@ -98,14 +98,21 @@ def test_unstable_filters_below_threshold():
     s1 = _snap(_entry(5000))
     s2 = _snap()  # gone
     report = analyse([s1, s2])
-    # stability == 0.5, default threshold is typically < 1.0
-    unstable = report.unstable(threshold=0.8)
+    # stability == 0.5, default threshold is typically 0.8
+    unstable = report.unstable()
     assert any(t.port == 5000 for t in unstable)
 
 
 def test_unstable_excludes_stable_ports():
-    """Ports present in every snapshot should not appear in unstable results."""
+    """Ports present in every snapshot should not appear in unstable()."""
     snaps = [_snap(_entry(443)) for _ in range(4)]
     report = analyse(snaps)
-    unstable = report.unstable(threshold=0.8)
-    assert not any(t.port == 443 for t in unstable)
+    unstable = report.unstable()
+    assert all(t.port != 443 for t in unstable)
+
+
+def test_snapshots_analysed_count():
+    """report.snapshots_analysed should equal the number of snapshots passed."""
+    snaps = [_snap(_entry(80)), _snap(_entry(80)), _snap(_entry(80))]
+    report = analyse(snaps)
+    assert report.snapshots_analysed == 3
