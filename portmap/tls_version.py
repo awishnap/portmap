@@ -38,7 +38,17 @@ class TLSVersionResult:
 
 
 def detect(host: str, port: int, timeout: float = 2.0) -> TLSVersionResult:
-    """Attempt a TLS handshake and return the negotiated version."""
+    """Attempt a TLS handshake and return the negotiated version.
+
+    Args:
+        host: Hostname or IP address to connect to.
+        port: TCP port number to connect to.
+        timeout: Connection timeout in seconds.
+
+    Returns:
+        A TLSVersionResult with the negotiated TLS version and cipher suite,
+        or version=None if the connection failed or no TLS was detected.
+    """
     ctx = ssl.create_default_context()
     ctx.check_hostname = False
     ctx.verify_mode = ssl.CERT_NONE
@@ -54,5 +64,28 @@ def detect(host: str, port: int, timeout: float = 2.0) -> TLSVersionResult:
 
 
 def enrich(entries: List[PortEntry], host: str = "127.0.0.1", timeout: float = 2.0) -> List[TLSVersionResult]:
-    """Run TLS detection against a list of PortEntry objects."""
+    """Run TLS detection against a list of PortEntry objects.
+
+    Args:
+        entries: List of PortEntry objects whose ports will be probed.
+        host: Hostname or IP address to connect to for each port.
+        timeout: Connection timeout in seconds per port.
+
+    Returns:
+        A list of TLSVersionResult objects, one per entry.
+    """
     return [detect(host, e.port, timeout=timeout) for e in entries]
+
+
+def filter_deprecated(results: List[TLSVersionResult]) -> List[TLSVersionResult]:
+    """Return only results where a deprecated TLS version was negotiated.
+
+    Useful for quickly identifying ports that need to be upgraded.
+
+    Args:
+        results: List of TLSVersionResult objects to filter.
+
+    Returns:
+        A list containing only results with deprecated TLS versions.
+    """
+    return [r for r in results if r.deprecated]
