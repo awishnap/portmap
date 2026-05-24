@@ -95,3 +95,15 @@ def resolve_bind_address(interface_name: str) -> Optional[str]:
         if iface.name == interface_name:
             return iface.primary_address()
     return None
+
+
+def find_interface_by_address(address: str) -> Optional[NetworkInterface]:
+    """Return the first interface that owns the given IPv4 address, or None.
+
+    This is useful for reverse-lookups when you have an IP address and need
+    to identify which interface it belongs to.
+    """
+    for iface in list_interfaces():
+        if address in iface.addresses:
+            return iface
+    return None
